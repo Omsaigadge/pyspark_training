@@ -1,0 +1,466 @@
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+PL/SQL - DAY 1
+---------------
+
+Q1) after lru, query is removed from library cache, so subsequent data is removed from db cache? if no then how is next query verified if no query is in library cache? and if yes then 1is data matched? what is the point of library cache? is query compared or data compared?
+
+Q2) Pinned table is stored static or dynamic? i.e after pinning does it update dynamically or is it stored once like a static table
+
+execution plan
+
+
+
+oracle server 19c architecture
+
+components: 1. oracle db
+			2. instance -- memory where data from database is kept and is stored, query is hit here whenever done -- ram of server
+			
+instance -- 1. s.g.a -- system global area -- has smaller memories called shared pool
+			2. b.p -- background processes
+			
+oracle db -- 
+1. physical db -- a. data file -- insert/update/delete all data is stored here / packages / all db objects / dictionaries / has blocks which has rows / can have multiple tables
+				  b. control file -- details about database itself (structure of db)
+				  c. redo log file -- stores changes temporarily
+2. logical structure
+
+SGA:
+	1. Shared Pool:
+				a. Library cache -- query hits and text of query is stored here if syntax is correct / execution plan which explains how to access data for the query ( for example, if indexing is done for tables then index is used else full table scan is done for the where clause being given)
+				b. Dictionary cache -- privilage info like user access to specific table being used
+				c. Result Cache
+	2. Database Buffer Cache  -- retrieved rows are being stored here
+	3. Redo log buffer cache
+	
+Background Processes:
+1. PMON -- Processes Monitor -- takes care of releasing the locks on multiple users/ dead resource handling ( server process with no user process)
+2. SMON -- System Monitor
+3. DBWR -- Database writer 
+4. LGWR -- log writer
+5. CKPT -- checkpoint process
+
+
+query -- user proccess takes this to respective server process
+	  -- session is connection between user and server process
+
+parsing -- library cache and dictionary cache steps together combined is called parsing	
+
+Case2:
+DML -- Data Manipulation Language (DML) consists of SQL commands used to add, modify, delete, and query data inside database tables
+	-- 2 blocks will be created on every operation
+	-- one block is empty where copy of retrieved data is created taken from another data file
+	-- block which has been updated is dirty block, empty is called undo block
+	-- redo log will store the changes , so it has 
+	-- original_value, change, file_id(from which data was read), file_block_id (block from file where change was made), scn --- after commit this is put in redo log file
+	-- once redo log file is filled log swtich takes place where lgwr makes a checkpoint and starts writing in next redo log file
+	-- on checkpoint, ckpt will call dbwr and dbwr will identify and write all dirty blocks to data file and db is in sync
+	
+LRU -- least recently used query is removed from library cache 
+
+
+Keep cache -- freuqently used tables are pinned here
+Recycle cache -- for storing occassionally used large tables
+
+ALTER TABLE <table_name> 
+	STORAGE(Buffer_pool keep);  -- for storing frequently accessed smaller tables
+
+	
+Table size = number of rows * size of row
+
+execution plans:
+Uses -- effect of indexes
+	 -- acccess path
+	 -- verifying the use of indexes
+	 -- verifying which execution plan may be used
+	 
+	 
+nested loop join
+sorted join
+hash join
+
+if selection of resultant records is more than 6 percent oracle automatically goes for full table scan
+if where clause has calculation, full table scan is done automatically
+
+count(1) -- does full table scan, fetch one column which is primary key or a not null column and return count
+count(*) -- does a full table scan as well, but it fetches full rows and returns count
+
+hints
+materialized view
+
+
+
+maximum parallelism
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+PL/SQL - DAY 2
+---------------
+execution plan is stored in the library cache
+
+auto trace
+index unique scan -- when index is primary key
+
+index range scan
+
+index rebuilding
+histograms
+-- statistics for storing details about data -- metadata (for eg. count of customer txns which will decide if full table scan or indexing is to be used) -- statistics is gathered by developer 
+--
+Eg. 
+Acc_no  No_of_txn
+10		3000 -- full table scan
+11		100 -- index
+12		123 -- index
+13		5000 -- full table scan
+14		1500 -- full table scan
+
+stats gathering is done regularly after every loading job
+
+packages -- collection of procedures and functions
+can be created without body
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+PL/SQL Day 3
+------------
+
+
+-- CREATING ACCOUNT MASTER
+create table acct_mstr(accno number(4) PRIMARY KEY, accname varchar2(30),
+balance number(9,2))
+
+insert into acct_mstr values(&accno,'&accname',&bal)
+
+commit;
+
+select * from acct_mstr;
+
+
+-- CREATING TXN MASTER
+create table txn_mstr(accno number(4) references acct_mstr, txn_type varchar2(1), amount number(9,2))
+
+
+insert into txn_mstr values(&accno,'&txn_type',&amount)
+
+
+-- cursor for batch job to update data daily in account master table
+declare
+    cursor trans_curs
+    is
+    select * from txn_mstr for update;
+    begin
+        for trans_rec in trans_curs
+        loop
+        if trans_rec.txn_type ='C' then
+            update acct_mstr
+            set balance=balance-trans_rec.amount
+            where accno=trans_rec.accno;
+        elsif trans_rec.txn_type='C' then
+            update acct_mstr
+            set balance=balance+trans_rec.amount
+            where accno = trans_rec.accno;
+            end if;
+            delete from txn_mstr where current of trans_curs;
+            end loop;
+            end;
+            
+            
+			
+Ref cursor -- strong ref cursor (fixed return valuue)
+		   -- weak ref cursor (no fixed value of return)
+		   
+		   
+Strong REF CURSOR in Oracle is a cursor variable that has a predefined structure and fixed return type specified during its declaration. Because its shape is known at compile time,
+----------------- the PL/SQL engine enforces type-safety. You can only open a strong REF CURSOR for queries that exactly match its declared return structure, reducing runtime errors		   
+
+In Oracle PL/SQL, a weak REF CURSOR is a specific type of cursor variable that acts as a pointer to a result set but is declared without a fixed return structure.
+                    ---------------
+					
+plsql table -- alternative for array since there is no array in plsql
+
+nested table					
+
+
+create table acct_mstr(accno number(4) PRIMARY KEY, accname varchar2(30),
+balance number(9,2))
+
+insert into acct_mstr values(&accno,'&accname',&bal)
+
+commit;
+
+select * from acct_mstr;
+
+create table txn_mstr(accno number(4) references acct_mstr, txn_type varchar2(1), amount number(9,2))
+
+
+insert into txn_mstr values(&accno,'&txn_type',&amount)
+
+declare
+    cursor trans_curs
+    is
+    select * from txn_mstr for update;
+    begin
+        for trans_rec in trans_curs
+        loop
+        if trans_rec.txn_type ='C' then
+            update acct_mstr
+            set balance=balance-trans_rec.amount
+            where accno=trans_rec.accno;
+        elsif trans_rec.txn_type='C' then
+            update acct_mstr
+            set balance=balance+trans_rec.amount
+            where accno = trans_rec.accno;
+            end if;
+            delete from txn_mstr where current of trans_curs;
+            end loop;
+            end;
+            
+
+declare type emp_rec_type is record(empno employees.employee_id%type,
+                                    ename employees.last_name%type,
+                                    sal employees.salary%type);
+                                    
+                                    
+-- employees working for that department
+
+create or replace Function disp_emp(v_dept_id employees.department_id%type)
+return sys_refcursor
+is
+emplist sys_refcursor;
+
+begin
+    open emplist for select last_name from employees
+    where department_id=v_dept_id;
+    return emplist;
+    end;
+    
+    declare
+        employee_list sys_refcursor;
+        lname employees.last_name%type;
+        begin
+            employee_list:= disp_emp(60);
+            loop
+                fetch employee_list into lname;
+                exit when employee_list%notfound;
+                dbms_output.put_line(lname);
+            end loop;
+        end;
+        
+
+
+
+-- sample code to store first name and last name in a plsql table
+set serveroutput on
+declare
+    type dept_array is table of departments%ROWTYPE
+    index by pls_integer;
+    
+    dept_name dept_array;
+    i number:=1;
+    begin
+        for deptrec in (select * from departments)
+        loop
+        dept_name(i):=deptrec;
+        i:=i+1;
+        end loop;
+        dbms_output.put_line(dept_name(1).department_id||'  '||dept_name(1).department_name);
+        dbms_output.put_line(dept_name(5).department_id||'  '||dept_name(5).department_name);
+        end;
+        
+        
+select * from departments;        
+
+--- nested table
+set serveroutput on
+
+--1. Create an object type "emp_obj" with the following attributes empno number(4),ename varchar2(20) and sal number(9,2)
+create or replace type emp_obj as object(
+empno number(4), ename varchar2(20), sal number(9,2)
+);
+
+--2. Create a emp_nst_ty based on emp_obj
+create or replace type emp_nst_ty as table of emp_obj;
+
+--3. Create table emp_dept with the following Structure deptno number(4),dname varchar2(20),loc varchar2(20), emp_details emp_nst_ty
+CREATE TABLE emp_dept (
+    deptno      NUMBER(4),
+    dname       VARCHAR2(20),
+    loc         VARCHAR2(20),
+    emp_details emp_nst_ty
+)
+NESTED TABLE emp_details STORE AS emp_details_tab;
+
+/*
+4. Insert a record into emp_dept 
+   10 'Accounts', 'Chennai',     100 ford 2300
+                                 101  Allen 3400
+                                 102  Scott 4300
+*/
+insert into emp_dept
+values (
+10,
+'Accounts',
+'Chennai',
+emp_nst_ty(
+        emp_obj(100, 'Ford', 2300),
+        emp_obj(101, 'Allen', 3400),
+        emp_obj(102, 'Scott', 4300)
+    )
+);
+
+--5.Query all columns of emp_dept
+select * from emp_dept;
+
+
+--6.Query the  employee details 
+select e.* from emp_dept d,table(d.emp_details) e ;
+
+--7.Query deptno,deptname along with emp details
+select d.deptno,d.dname,e.empno,e.ename from emp_dept d,table(d.emp_details) e
+where d.deptno=10
+
+--8. Display the details of Ford
+select e.* from emp_dept d,table(d.emp_details) e
+where e.ename='Ford'
+
+--9. Display the details of the employees along with dept details whose salary is More than 3500
+select e.* from emp_dept d,table(d.emp_details) e
+where e.sal>3500
+
+--10. Update the salary of scott by providing an increment of 5%
+
+
+    UPDATE TABLE(
+    SELECT d.emp_details
+    FROM emp_dept d
+    WHERE d.deptno = 10
+) e
+SET e.sal = e.sal * 1.05
+WHERE e.ename = 'Scott';
+
+COMMIT;
+
+--11. Delete the details of employee-id 102
+
+
+delete from table
+( select emp_details
+  from emp_dept
+  where deptno=10) e
+  where e.empno=102
+  
+  
+--12.Write a plsql code to display the department details
+
+
+SET SERVEROUTPUT ON;
+
+BEGIN
+    FOR d IN (SELECT * FROM emp_dept)
+    LOOP
+        DBMS_OUTPUT.PUT_LINE('Department Number: ' || d.deptno);
+        DBMS_OUTPUT.PUT_LINE('Department Name: ' || d.dname);
+        DBMS_OUTPUT.PUT_LINE('Location: ' || d.loc);
+
+        DBMS_OUTPUT.PUT_LINE('Employee Details:');
+
+        FOR i IN 1 .. d.emp_details.COUNT
+        LOOP
+            DBMS_OUTPUT.PUT_LINE(
+                d.emp_details(i).empno || '  ' ||
+                d.emp_details(i).ename || '  ' ||
+                d.emp_details(i).sal
+            );
+        END LOOP;
+
+        DBMS_OUTPUT.PUT_LINE('--------------------------');
+    END LOOP;
+END;
+
+
+--13.write a plsql code to Count the no of employees departmentwise
+   
+
+SET SERVEROUTPUT ON;
+
+BEGIN
+    FOR d IN (SELECT * FROM emp_dept)
+    LOOP
+        DBMS_OUTPUT.PUT_LINE(
+            'Department: ' || d.dname ||
+            '  Deptno: ' || d.deptno ||
+            '  No. of Employees: ' || d.emp_details.COUNT
+        );
+    END LOOP;
+END;
+/
+
+--14.Write a plsql code to Insert a new employee record for deptno 10
+
+
+
+SET SERVEROUTPUT ON;
+
+BEGIN
+    UPDATE emp_dept
+    SET emp_details = emp_details MULTISET UNION
+        emp_nst_ty(
+            emp_obj(103, 'Martin', 2800)
+        )
+    WHERE deptno = 10;
+
+    IF SQL%ROWCOUNT > 0 THEN
+        DBMS_OUTPUT.PUT_LINE(
+            'Employee inserted successfully.'
+        );
+    ELSE
+        DBMS_OUTPUT.PUT_LINE(
+            'Department 10 not found.'
+        );
+    END IF;
+
+    COMMIT;
+END;
+
+--15.Write a plsql code to display all the employee records
+
+SET SERVEROUTPUT ON;
+
+BEGIN
+    FOR d IN (SELECT * FROM emp_dept)
+    LOOP
+        DBMS_OUTPUT.PUT_LINE(
+            'Department: ' || d.dname ||
+            ' (Deptno: ' || d.deptno || ')'
+        );
+
+        FOR i IN 1 .. d.emp_details.COUNT
+        LOOP
+            DBMS_OUTPUT.PUT_LINE(
+                'Empno: ' || d.emp_details(i).empno ||
+                ', Name: ' || d.emp_details(i).ename ||
+                ', Salary: ' || d.emp_details(i).sal
+            );
+        END LOOP;
+
+        DBMS_OUTPUT.PUT_LINE('--------------------------');
+    END LOOP;
+END;
+/
+
+-----------------------------------------------------------------------------------------------------------------------------------
+
+SQL code executed by SQL engine
+Pl/SQL code is executed by pl/sql engine
+
+types of compilation:
+--interpreter compilation - used during development
+--native compilation - used in production -- this is faster as it skips other language code and directly compiles
+
+-- do not assign not null values while declaring variables
+-- use pls_integer for declaring integer based variables
+-- avoid loop and use begin and end
+-- commit outside loop since it creates a redo log entry every time
+-- insert to be done using a procedure
+
+
+---------------------------------------------------------------------
